@@ -29,49 +29,62 @@ const authenticatedUser = (username,password)=>{ //returns boolean
 
 //only registered users can login
 regd_users.post("/login", (req,res) => {
-  const username = req.query.username;
-  const password = req.query.password;
-
-  if (!username || !password) {
-      return res.status(404).json({message: "Error logging in"});
-  }
-
-  if (authenticatedUser(username,password)) {
-    let accessToken = jwt.sign({
-      data: password
-    }, 'access', { expiresIn: 60 * 60 });
-
-    req.session.authorization = {
-      accessToken,username
-  }
-  return res.status(200).send("User successfully logged in");
-  } else {
-    return res.status(208).json({message: "Invalid Login. Check username and password"});
-  }
+  const username = req.body.username;
+    const password = req.body.password;
+    // Check if username or password is missing
+    if (!username || !password) {
+        return res.status(404).json({ message: "Error logging in" });
+    }
+    // Authenticate user
+    if (authenticatedUser(username, password)) {
+        // Generate JWT access token
+        let accessToken = jwt.sign({
+            data: password
+        }, 'access', { expiresIn: 60 * 60 });
+        // Store access token and username in session
+        req.session.authorization = {
+            accessToken, username
+        }
+        return res.status(200).send("User successfully logged in");
+    } else {
+        return res.status(208).json({ message: "Invalid Login. Check username and password" });
+    }
 });
 
 // Add a book review
 regd_users.put("/auth/review/:isbn", (req, res) => {
-  try {
-    const requestedIsbn = req.params.isbn;
-    const reviewText = req.query.review;
-    const username = req.session.authorization.username; // Assuming username is stored in the session
+// Obtener el ISBN del libro de los parámetros
+  const isbn = req.params.isbn;
+  
+  // Obtener el nombre de usuario de la sesión
+  const username = req.session.authorization?.username;
 
-    if (!username) {
-      return res.status(401).json({ message: "Unauthorized" }); // Handle unauthorized access
-    }
+  if (!username) {
+    return res.status(401).json({ message: "User not authenticated" });
+  }
 
-    const book = books[requestedIsbn];
+  // Obtener la nueva reseña del cuerpo de la solicitud
+  const { review } = req.body;
 
-    if (book) {
-      book.reviews[username] = reviewText; // Add or modify review based on username
-      res.json({ message: "Review added/modified successfully" });
-    } else {
-      res.status(404).json({ message: "Book not found" }); // Handle book not found
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error adding/modifying review" }); // Handle unexpected errors
+  // Verificar si el libro existe
+  if (!books[isbn]) {
+    return res.status(404).json({ message: "Book not found" });
+  }
+
+  // Inicializar el objeto de reseñas si no existe
+  if (!books[isbn].reviews) {
+    books[isbn].reviews = {};
+  }
+
+  // Verificar si el usuario ya tiene una reseña para este libro
+  if (books[isbn].reviews[username]) {
+    // Modificar la reseña existente
+    books[isbn].reviews[username] = review;
+    return res.status(200).json({ message: "Review updated successfully" });
+  } else {
+    // Agregar una nueva reseña para el usuario
+    books[isbn].reviews[username] = review;
+    return res.status(200).json({ message: "Review added successfully" });
   }
 });
 
